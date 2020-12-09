@@ -1,0 +1,108 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Zim Demo - Authorizer
+Globals:
+  Function:
+    Timeout: 10
+    MemorySize: 256
+    Tracing: Active
+    Runtime: go1.x
+Parameters:
+  LogRetentionInDays:
+    Description: Number of days to retain lambda log messages
+    Type: String
+    Default: "30"
+Resources:
+  Key:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: Auth KMS Key
+      Enabled: true
+      EnableKeyRotation: false
+      KeyPolicy:
+        Version: '2012-10-17'
+        Id: 'auth-key-policy'
+        Statement:
+        - Sid: Enable IAM User Permissions
+          Effect: 'Allow'
+          Principal:
+            AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+          Action: 'kms:*'
+          Resource: '*'
+        - Sid: Allow GenerateDataKey
+          Effect: 'Allow'
+          Principal:
+            Service: s3.amazonaws.com
+          Action:
+          - kms:GenerateDataKey*
+          Resource: '*'
+  KeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: alias/zim-demo/auth
+      TargetKeyId: !Ref Key
+  AuthFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: zim-auth
+      CodeUri: ../../artifacts/authorizer.zip
+      Handler: ./authorizer
+      Role: !GetAtt AuthLambdaRole.Arn
+      Environment:
+        Variables:
+          TABLE: !Sub "${AuthTokenTable}"
+  AuthLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action: sts:AssumeRole
+      ManagedPolicyArns:
+      - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+      - "arn:aws:iam::aws:policy/AWSXrayWriteOnlyAccess"
+      Policies:
+      - PolicyName: DynamoDBAccess
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - dynamodb:GetItem
+            Resource:
+            - !GetAtt AuthTokenTable.Arn
+      - PolicyName: KMSKeyAccess
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            Effect: Allow
+            Action:
+            - kms:Decrypt
+            - kms:GenerateDataKey
+            - kms:DescribeKey
+            Resource: !GetAtt Key.Arn
+  AuthLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${AuthFunction}"
+      RetentionInDays: !Ref LogRetentionInDays
+  AuthTokenTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: AuthTokens
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        KMSMasterKeyId: !GetAtt Key.Arn
+        SSEEnabled: true
+        SSEType: KMS
+      AttributeDefinitions:
+      - AttributeName: Token
+        AttributeType: S
+      KeySchema:
+      - AttributeName: Token
+        KeyType: HASH
+      BillingMode: PAY_PER_REQUEST

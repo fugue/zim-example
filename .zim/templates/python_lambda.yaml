@@ -1,0 +1,50 @@
+kind: python_lambda
+# docker:
+#   image: lambci/lambda:build-python3.8
+toolchain:
+  items:
+    - name: python version
+      command: python --version
+    - name: os version
+      command: uname -sm
+rules:
+  layer:
+    inputs:
+      - requirements.txt
+    outputs:
+      - ${NAME}.layer.zip
+    commands:
+      - cleandir: build/layer
+      - run: pip install -r ${INPUT} -t build/layer
+      - zip:
+          cd: build/layer
+          output: ${ARTIFACT}
+  handler:
+    requires:
+      - rule: layer
+    inputs:
+      - ${NAME}/**.py
+    outputs:
+      - ${NAME}.handler.zip
+    commands:
+      - cleandir: build/handler
+      - run: pip install . --no-deps -t build/handler
+      - zip:
+          cd: build/handler
+          output: ${ARTIFACT}
+  build:
+    requires:
+      - rule: layer
+      - rule: handler
+  test:
+    native: true
+    commands:
+      - mkdir: venv
+      - run: |
+          python -m venv venv
+          source venv/bin/activate
+          pip install -q -r requirements.txt
+          pip install -q pytest==6.1.2 pytest-cov==2.10.1 --upgrade
+      - run: |
+          source venv/bin/activate
+          PYTHONPATH=. pytest -p pytest_cov --cov=${NAME}

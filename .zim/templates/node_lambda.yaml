@@ -1,0 +1,53 @@
+kind: node_lambda
+# docker:
+#   image: fugue2/builder:1.0.0
+
+toolchain:
+  items:
+    - name: node
+      command: node -v
+    - name: os
+      command: uname -sm
+
+environment:
+  YARN_CACHE_FOLDER: ../../.cache/yarn
+  YARN_OPTS: --non-interactive --prefer-offline --network-timeout 120000 --mutex file:../../.yarn-mutex --prod --frozen-lockfile
+
+rules:
+  # Builds a NodeJS lambda layer
+  layer:
+    inputs:
+      - package.json
+      - yarn.lock
+    outputs:
+      - ${NAME}.node_modules.zip
+    commands:
+      - cleandir: build/nodejs
+      - run: yarn --modules-folder build/nodejs ${YARN_OPTS}
+      - copy:
+          src: package.json
+          dst: build/nodejs/package.json
+      - zip:
+          cd: build
+          input: nodejs
+          output: ${ARTIFACT}
+
+  # Builds a zip containing the handler source
+  handler:
+    native: true
+    inputs:
+      - src/**
+    outputs:
+      - ${NAME}.zip
+    commands:
+      - cleandir: build/handler
+      - run: cp -r src/* build/handler
+      - zip:
+          cd: build/handler
+          output: ${ARTIFACT}
+
+  # Build requires layer and handler in order to build those artifacts
+  build:
+    requires:
+      - rule: layer
+      - rule: handler

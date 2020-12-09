@@ -1,0 +1,71 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Zim Demo - S3 Bucket
+Resources:
+  ArtifactsKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: Zim Demo - Artifacts Key
+      Enabled: true
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Id: 'key-policy'
+        Statement:
+        - Sid: Enable IAM User Permissions
+          Effect: 'Allow'
+          Principal:
+            AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+          Action: 'kms:*'
+          Resource: '*'
+        - Sid: Allow GenerateDataKey
+          Effect: 'Allow'
+          Principal:
+            Service: s3.amazonaws.com
+          Action: kms:GenerateDataKey*
+          Resource: '*'
+  ArtifactsKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: alias/zim-demo-artifacts-key
+      TargetKeyId: !Ref ArtifactsKey
+  ArtifactsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Join ['-', ['zim-demo-artifacts', !Ref 'AWS::AccountId']]
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              KMSMasterKeyID: !Ref ArtifactsKey
+              SSEAlgorithm: aws:kms
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+  ArtifactsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ArtifactsBucket
+      PolicyDocument:
+        Statement:
+          - Sid: Require HTTPS
+            Action:
+              - 's3:*'
+            Effect: 'Deny'
+            Principal:
+              AWS: '*'
+            Resource:
+              - !Sub '${ArtifactsBucket.Arn}/*'
+            Condition:
+              Bool:
+                'aws:SecureTransport': false
+          - Action: 
+            - 's3:PutObject'
+            Effect: 'Deny'
+            Resource:
+              - !Sub '${ArtifactsBucket.Arn}/*'
+            Principal: '*'
+            Condition:
+                'StringNotEqualsIfExists':
+                    's3:x-amz-server-side-encryption': 'SSE-KMS'
+                    's3:x-amz-server-side-encryption-aws-kms-key-id': !Ref ArtifactsKey

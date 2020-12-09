@@ -1,0 +1,25 @@
+kind: go_binary
+# docker:
+#   image: cimg/go:1.15.6
+
+toolchain:
+  items:
+    - name: go version
+      command: go version
+    - name: os version
+      command: uname -sm
+
+rules:
+  # Build the go binary
+  build:
+    inputs:
+      - "**/*.go"
+    outputs:
+      - ${NAME}
+    commands:
+      - run: go build -v -o ${ARTIFACT}
+
+  # Run unit tests
+  test:
+    commands:
+      - run: go test -v ./...

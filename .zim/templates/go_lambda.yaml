@@ -1,0 +1,29 @@
+kind: go_lambda
+# docker:
+#   image: cimg/go:1.15.6
+
+toolchain:
+  items:
+    - name: go version
+      command: go version
+    - name: os version
+      command: uname -sm
+
+rules:
+  # Builds a zip containing the Go binary, for use in AWS Lambda
+  build:
+    inputs:
+      - "**/*.go"
+    outputs:
+      - ${NAME}.zip
+    commands:
+      - cleandir: build
+      - run: go build -v -o build/${NAME}
+      - zip:
+          cd: build
+          output: ${ARTIFACT}
+
+  # Run unit tests
+  test:
+    commands:
+      - run: go test -v ./...
