@@ -1,24 +1,48 @@
 # Zim Demo
 
-This repository shows how Zim can be used to build and deploy multiple
-components within a monorepo.
+This repository shows how Zim can be used to build and deploy components in a monorepo.
 
 ## Getting Started
 
-Install [Zim](https://github.com/fugue/zim).
+First up, install [Zim](https://github.com/fugue/zim). You can grab Linux and MacOS (Darwin) binaries from the [releases page](https://github.com/fugue/zim/releases). Confirm it works on your system by running:
 
-Then run `zim run build` to build all components.
+```shell
+$ zim --version
+zim version 0.3.0, build db38827
+```
+
+Next, check out this repository, cd into it, and run the following to have Zim print all components:
+
+```shell
+$ zim list components
+===========================
+NAME       | KIND
+===========================
+authorizer | go_lambda
+base       | cloudformation
+fake       | node_lambda
+opa_cli    | go_binary
+reverse    | python_lambda
+```
+
+Try running a build by running the following command. Note, by default you'll need Go, Python, and NodeJS available. Note the "Dockerized Builds" option discussed below obviates this requirement.
+
+```shell
+$ zim run build
+```
 
 ## Dockerized Builds
 
 Builds run on the host machine by default in this setup. To opt into running
 builds in Docker in order to target a different platform, uncomment these
-lines in each build template:
+lines in each build template under [.zim/templates](./.zim/templates).
 
 ```yaml
 docker:
   image: cimg/go:1.15.6
 ```
+
+Having the Docker image defines causes Zim to transparently run the build within a Docker container instead of on the host directly.
 
 ## Artifacts
 
